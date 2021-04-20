@@ -45,17 +45,21 @@ dataset = dataset.shuffle(BUFFER_SIZE).batch(BATCH_SIZE, drop_remainder=True)
 
 #vocab_size = len(vocab)
 
-embedding_dim = 128
-rnn_units = 192
+
 def build_model(vocab_size, embedding_dim, rnn_units, batch_size):
   model = tf.keras.Sequential([
     tf.keras.layers.Embedding(vocab_size, embedding_dim, batch_input_shape=[batch_size, seq_length]),
- #   tf.keras.layers.Embedding(vocab_size, embedding_dim, batch_input_shape=[batch_size, None]),
-    tf.keras.layers.GRU(rnn_units, return_sequences=True, stateful=True, recurrent_initializer='glorot_uniform'),
+    tf.keras.layers.Bidirectional(tf.keras.layers.LSTM(rnn_units, return_sequences=True)),
+    tf.keras.layers.Bidirectional(tf.keras.layers.LSTM(rnn_units)),
     tf.keras.layers.Flatten(),
+    tf.keras.layers.Dense(relu_units, activation='relu'),
     tf.keras.layers.Dense(vocab_size)
   ])
   return model
+
+embedding_dim = 128
+rnn_units = 192
+relu_units = 128
 
 if True:
     model = build_model(
