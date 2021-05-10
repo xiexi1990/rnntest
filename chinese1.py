@@ -117,22 +117,45 @@ for i in range(0, sum_stroke[end_char + 1] - sum_stroke[begin_char]):
 
 thx = np.sqrt(np.sum(dxl) / np.sum(lenl))
 
-# fig1 = plt.figure()
-# fig1_plt = fig1.add_subplot(1,1,1)
+# fig_before_preprocess = plt.figure()
+# fig_before_preprocess_plt = fig1.add_subplot(1,1,1)
 #
 # for i in range(sum_stroke[begin_char], sum_stroke[end_char + 1]):
-#     fig1_plt.plot(stroke_x[i], stroke_y[i], color="black")
+#     fig_before_preprocess_plt.plot(stroke_x[i], stroke_y[i], color="black")
 
 for i in range(0, sum_stroke[end_char + 1] - sum_stroke[begin_char]):
     for j in range(0, len(char_x[i])):
         char_x[i][j] = (char_x[i][j] - ux) / thx
         char_y[i][j] = (char_y[i][j] - uy) / thx
 
-fig2 = plt.figure()
-fig2_plt = fig2.add_subplot(1,1,1)
-
-for i in range(sum_stroke[begin_char], sum_stroke[end_char + 1]):
-    fig2_plt.plot(stroke_x[i], stroke_y[i], color="black")
+# fig_after_preprocess = plt.figure()
+# fig_after_preprocess_plt = fig_after_preprocess.add_subplot(1,1,1)
+#
+# for i in range(sum_stroke[begin_char], sum_stroke[end_char + 1]):
+#     fig_after_preprocess_plt.plot(stroke_x[i], stroke_y[i], color="black")
 
 #print("after remove, total points = " + str(removed_total))
-plt.show()
+#plt.show()
+
+L = []
+for i in range(0, len(char_x)):
+    for j in range(0, len(char_x[i])):
+        Li = np.zeros(6, dtype=float)
+        if j != len(char_x[i]) - 1:
+            Li[0] = char_x[i][j]
+            Li[1] = char_y[i][j]
+            Li[2] = char_x[i][j+1] - char_x[i][j]
+            Li[3] = char_y[i][j+1] - char_y[i][j]
+            Li[4] = 1
+            Li[5] = 0
+            L.append(Li)
+        else:
+            if i != len(char_x) - 1:
+                Li[0] = char_x[i][j]
+                Li[1] = char_y[i][j]
+                Li[2] = char_x[i+1][0] - char_x[i][j]
+                Li[3] = char_y[i+1][0] - char_y[i][j]
+                Li[4] = 0
+                Li[5] = 1
+                L.append(Li)
+
