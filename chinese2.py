@@ -1,6 +1,8 @@
 import struct
 import numpy as np
 import matplotlib.pyplot as plt
+import xlwt as xl
+
 
 def remove_point_dist(_x, _y, _dist):
     i = 1
@@ -23,13 +25,17 @@ def remove_point_ang(_x, _y, _tang):
     return _x, _y
 
 LA = []
-for file in range(1002, 1005):
+book = xl.Workbook()
+sheet = book.add_sheet('sheeta')
+col = 1
+for file in range(1001, 1240):
     filename = "e:\\tf_projects\\Pot1.1Train\\" + str(file) + ".pot"
     show = 999999
-    fbegin = 171
+    fbegin = 0
     fn = 10
     fcnt = 0
     with open(filename, "rb") as f:
+        print(filename)
         for _ in range(0, fbegin):
             f.read(struct.unpack("h", f.read(2))[0] - 2)
 
@@ -54,6 +60,10 @@ for file in range(1002, 1005):
                 print(str(total) + " gb2312 decode exception")
             else:
                 print(str(total) + " " + tag_code)
+
+            sheet.write(total+1, col, tag_code)
+            total += 1
+            continue
             A.append(tag_code)
 
             stroke_number = struct.unpack("h", f.read(2))[0]
@@ -161,5 +171,7 @@ for file in range(1002, 1005):
                 print("error")
             total += 1
         f.close()
+        col += 1
 
-print(len(LA))
+book.save("tmpxl.xls")
+#print(len(LA))
