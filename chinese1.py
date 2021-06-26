@@ -47,7 +47,7 @@ def remove_point_dist(_x, _y, _dist):
 def remove_point_ang(_x, _y, _tang):
     i = 1
     while i < len(_x) - 1:
-        if ((_x[i]-_x[i-1])*(_x[i+1]-_x[i])+(_y[i]-_y[i-1])*(_y[i+1]-_y[i]))/np.sqrt(((_x[i]-_x[i-1])**2+(_y[i]-_y[i-1])**2)*((_x[i+1]-_x[i])**2+(_y[i+1]-_y[i])**2)) > Tang:
+        if ((_x[i]-_x[i-1])*(_x[i+1]-_x[i])+(_y[i]-_y[i-1])*(_y[i+1]-_y[i]))/np.sqrt(((_x[i]-_x[i-1])**2+(_y[i]-_y[i-1])**2)*((_x[i+1]-_x[i])**2+(_y[i+1]-_y[i])**2)) > _tang:
             _x = np.delete(_x, [i])
             _y = np.delete(_y, [i])
             continue
@@ -128,14 +128,14 @@ for i in range(0, sum_stroke[end_char + 1] - sum_stroke[begin_char]):
         char_x[i][j] = (char_x[i][j] - ux) / thx
         char_y[i][j] = (char_y[i][j] - uy) / thx
 
-# fig_after_preprocess = plt.figure()
-# fig_after_preprocess_plt = fig_after_preprocess.add_subplot(1,1,1)
-#
-# for i in range(sum_stroke[begin_char], sum_stroke[end_char + 1]):
-#     fig_after_preprocess_plt.plot(stroke_x[i], stroke_y[i], color="black")
+fig_after_preprocess = plt.figure()
+fig_after_preprocess_plt = fig_after_preprocess.add_subplot(1,1,1)
 
-#print("after remove, total points = " + str(removed_total))
-#plt.show()
+for i in range(sum_stroke[begin_char], sum_stroke[end_char + 1]):
+    fig_after_preprocess_plt.plot(stroke_x[i], stroke_y[i], color="black")
+
+print("after remove, total points = " + str(removed_total))
+plt.show()
 
 L = []
 for i in range(0, len(char_x)):
