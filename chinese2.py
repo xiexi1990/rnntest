@@ -27,12 +27,12 @@ def remove_point_ang(_x, _y, _tang):
 LA = []
 book = xl.Workbook()
 sheet = book.add_sheet('sheeta')
-col = 1
+col = 0
 for file in range(1001, 1240):
     filename = "e:\\tf_projects\\Pot1.1Train\\" + str(file) + ".pot"
     show = 999999
     fbegin = 0
-    fn = 10
+    fn = 99999
     fcnt = 0
     with open(filename, "rb") as f:
         print(filename)
@@ -61,8 +61,9 @@ for file in range(1001, 1240):
             else:
                 print(str(total) + " " + tag_code)
 
-            sheet.write(total+1, col, tag_code)
+            sheet.write(total, col, tag_code)
             total += 1
+            f.read(sample_size - 6)
             continue
             A.append(tag_code)
 
