@@ -1,6 +1,7 @@
 import struct
 import numpy as np
 import matplotlib.pyplot as plt
+import pickle
 
 def remove_point_dist(_x, _y, _dist):
     i = 1
@@ -23,11 +24,11 @@ def remove_point_ang(_x, _y, _tang):
     return _x, _y
 
 LA = []
-for file in range(1002, 1005):
+for file in range(1001, 1041):
     filename = "e:\\tf_projects\\Pot1.1Train\\" + str(file) + ".pot"
     show = 999999
     fbegin = 171
-    fn = 10
+    fn = 221
     fcnt = 0
     with open(filename, "rb") as f:
         for _ in range(0, fbegin):
@@ -162,4 +163,8 @@ for file in range(1002, 1005):
             total += 1
         f.close()
 
+
+f = open("dump_la","wb")
+pickle.dump(LA, f, protocol=4)
+f.close()
 print(len(LA))
