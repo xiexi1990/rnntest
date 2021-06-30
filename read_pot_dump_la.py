@@ -23,12 +23,16 @@ def remove_point_ang(_x, _y, _tang):
         i += 1
     return _x, _y
 
+# filelist = []
+# taglist = []
+# strokeslist = []
 LA = []
-for file in range(1001, 1041):
+for file in range(1001, 1031):
     filename = "e:\\tf_projects\\Pot1.1Train\\" + str(file) + ".pot"
+    print(filename)
     show = 999999
     fbegin = 171
-    fn = 221
+    fn = 99999
     fcnt = 0
     with open(filename, "rb") as f:
         for _ in range(0, fbegin):
@@ -36,7 +40,9 @@ for file in range(1001, 1041):
 
         total = 0
         while total < fn:
-            A = [file]
+            A = []
+            # filelist.append(file)
+            A.append(file)
             _sample_size = f.read(2)
             if len(_sample_size) == 0:
                 break
@@ -55,6 +61,7 @@ for file in range(1001, 1041):
                 print(str(total) + " gb2312 decode exception")
             else:
                 print(str(total) + " " + tag_code)
+            #taglist.append(tag_code)
             A.append(tag_code)
 
             stroke_number = struct.unpack("h", f.read(2))[0]
@@ -149,6 +156,7 @@ for file in range(1001, 1041):
 
             A.append(L)
             LA.append(A)
+            #strokeslist.append(L)
             if total == show:
                 fig_after_preprocess_plt = fig1.add_subplot(1, 3, 3)
 
@@ -164,7 +172,8 @@ for file in range(1001, 1041):
         f.close()
 
 
-f = open("dump_la","wb")
+f = open("dump_la_30","wb")
+#pickle.dump((filelist, taglist, strokeslist), f, protocol=4)
 pickle.dump(LA, f, protocol=4)
 f.close()
-print(len(LA))
+
