@@ -3,7 +3,10 @@ from collections import Counter
 #from keras.utils import to_categorical
 import numpy as np
 
-with open("rand_la_900", "rb") as f:
+la_len = 100
+nclass = 10
+
+with open("rand_la_" + str(la_len), "rb") as f:
     la = pickle.load(f)
     f.close()
 
@@ -16,7 +19,7 @@ while i < len(la):
     # tag = tagbytes[0] * 256 + tagbytes[1]
     # taglist.append(tag)
     curtag = la[i][1]
-    cur_y = np.zeros(30)
+    cur_y = np.zeros(nclass)
     cur_y[j] = 1
     while la[i][1] == curtag:
         x.append(la[i][2])
@@ -30,6 +33,10 @@ z = sorted(zip(x, y), key=lambda l:np.size(l[0], 0))
 result = zip(*z)
 
 x, y = [list(i) for i in result]
-print(len(y))
+
+with open("x_y_" + str(la_len), "wb") as f:
+    pickle.dump((x, y), f)
+    f.close()
+
 #_, _taglist = np.unique(taglist, return_inverse=True)
 

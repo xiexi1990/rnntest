@@ -26,8 +26,9 @@ def remove_point_ang(_x, _y, _tang):
 # filelist = []
 # taglist = []
 # strokeslist = []
+la_total = 10
 LA = []
-for file in range(1001, 1031):
+for file in range(1001, 1001+la_total):
     filename = "e:\\tf_projects\\Pot1.1Train\\" + str(file) + ".pot"
     print(filename)
     show = 999999
@@ -172,7 +173,7 @@ for file in range(1001, 1031):
         f.close()
 
 
-f = open("dump_la_30","wb")
+f = open("dump_la_" + str(la_total),"wb")
 #pickle.dump((filelist, taglist, strokeslist), f, protocol=4)
 pickle.dump(LA, f, protocol=4)
 f.close()
