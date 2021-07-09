@@ -1,32 +1,28 @@
-import pickle
-import keras
-import tensorflow as tf
+from keras.models import Sequential
+from keras.layers import LSTM, Dense, TimeDistributed
+from keras.utils import to_categorical
 import numpy as np
 
-config = tf.compat.v1.ConfigProto()
-config.gpu_options.allow_growth=True
-sess = tf.compat.v1.Session(config=config)
-tf.compat.v1.keras.backend.set_session(sess)
+model = Sequential()
 
-with open("x_y_100", "rb") as f:
-    x, y = pickle.load(f)
-    f.close()
+model.add(LSTM(32, return_sequences=True, input_shape=(None, 5)))
+model.add(LSTM(8, return_sequences=True))
+model.add(TimeDistributed(Dense(2, activation='sigmoid')))
 
-xrag = tf.ragged.constant(x)
-yarr = np.array(y)
+print(model.summary(90))
 
-model = keras.Sequential([
-    keras.layers.Input(shape=[None, 6], batch_size=1, dtype=tf.float32, ragged=True),
+model.compile(loss='categorical_crossentropy',
+              optimizer='adam')
 
-    keras.layers.LSTM(64),
-    keras.layers.Flatten(),
-    keras.layers.Dense(10, activation='softmax')
+def train_generator():
+    while True:
+        sequence_length = np.random.randint(10, 100)
+        x_train = np.random.random((1, sequence_length, 5))
+        # y_train will depend on past 5 timesteps of x
+        y_train = x_train[:, :, 0]
+        for i in range(1, 5):
+            y_train[:, i:] += x_train[:, :-i, i]
+        y_train = to_categorical(y_train > 2.5)
+        yield x_train, y_train
 
-])
-
-model.compile(optimizer=keras.optimizers.Adam(1e-4), loss=keras.losses.CategoricalCrossentropy(from_logits=True), metrics=['accuracy'])
-
-history = model.fit(xrag, yarr, epochs=1000)
-
-
-#print(model(x[0]))
+model.fit_generator(train_generator(), steps_per_epoch=30, epochs=10, verbose=1)

@@ -5,6 +5,7 @@ import random
 from typing import Union
 from math import ceil
 from os import mkdir
+import pickle
 
 UNK = '<UNK>' # Unknown word
 EOS = '<EOS>' # End of sentence
@@ -199,31 +200,25 @@ class Model:
             a, y_hat = self(a, x)
         return s
 
-    def save(self, name: str) -> None:
-        mkdir(f'./{name}')
-        with open(f'./{name}/vocabulary.txt', 'w') as f:
-            f.write(','.join(self.vocab))
-        with open(f'./{name}/a_size.txt', 'w') as f:
-            f.write(str(self.a_size))
-        np.save(f'./{name}/wa.npy', self.wa.numpy())
-        np.save(f'./{name}/ba.npy', self.ba.numpy())
-        np.save(f'./{name}/wy.npy', self.wy.numpy())
-        np.save(f'./{name}/by.npy', self.by.numpy())
+    def save(self) -> None:
+        with open("simple-model-weights", 'wb') as f:
+            pickle.dump((self.vocab, self.a_size, self.wa, self.ba, self.wy, self.by), f, protocol=4)
+            f.close()
 
-    def load(self, name: str) -> None:
-        with open(f'./{name}/vocabulary.txt', 'r') as f:
-            self.vocab = f.read().split(',')
-        with open(f'./{name}/a_size.txt', 'r') as f:
-            self.a_size = int(f.read())
 
-        self.vocab_size = len(self.vocab)
-        self.combined_size = self.vocab_size + self.a_size
+    def load(self) -> None:
+        with open("simple-model-weights", 'rb') as f:
+            self.vocab, self.a_size, self.wa, self.ba, self.wy, self.by = pickle.load(f)
+            f.close()
+            self.vocab_size = len(self.vocab)
+            self.combined_size = self.vocab_size + self.a_size
+            self.weights = [self.wa, self.ba, self.wy, self.by]
 
-        self.wa = tf.Variable(np.load(f'./{name}/wa.npy'))
-        self.ba = tf.Variable(np.load(f'./{name}/ba.npy'))
-        self.wy = tf.Variable(np.load(f'./{name}/wy.npy'))
-        self.by = tf.Variable(np.load(f'./{name}/by.npy'))
-        self.weights = [self.wa, self.ba, self.wy, self.by]
+        # self.wa = tf.Variable(np.load(f'./{name}/wa.npy'))
+        # self.ba = tf.Variable(np.load(f'./{name}/ba.npy'))
+        # self.wy = tf.Variable(np.load(f'./{name}/wy.npy'))
+        # self.by = tf.Variable(np.load(f'./{name}/by.npy'))
+        # self.weights = [self.wa, self.ba, self.wy, self.by]
 
 
 
@@ -243,10 +238,10 @@ sess = tf.compat.v1.Session(config=config)
 tf.compat.v1.keras.backend.set_session(sess)
 
 model = Model(vocabulary, 1024)
-model.fit(sentences, batch_size=128, epochs=2)
+#model.fit(sentences, batch_size=128, epochs=2)
 
-model.save('news_headlines_model')
-# model.load('news_headlines_model')
+#model.save()
+model.load()
 
 for i in range(20):
     print(model.sample())
