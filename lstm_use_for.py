@@ -1,6 +1,6 @@
 import tensorflow as tf
 import numpy as np
-batch_size = 1
+batch_size = 2
 hidden_size = 4
 num_steps = 3
 input_dim = 5
@@ -27,7 +27,10 @@ with tf.variable_scope('for_loop', initializer= tf.ones_initializer):
         else:
             output = lstm_cell(x[:, i, :], z_state)
         outputs.append(output)
-with tf.Session() as sess:
+
+config = tf.ConfigProto()
+config.gpu_options.allow_growth = True
+with tf.Session(config=config) as sess:
     init_op = tf.initialize_all_variables()
     sess.run(init_op)
     result = sess.run(outputs, feed_dict={x: input})
