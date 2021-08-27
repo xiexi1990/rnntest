@@ -1,6 +1,4 @@
 import pickle
-from collections import Counter
-#from keras.utils import to_categorical
 import numpy as np
 
 la_len = 100

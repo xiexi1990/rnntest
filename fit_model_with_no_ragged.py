@@ -125,8 +125,10 @@ s_lstm_layer = S_LSTM(16, 2)
 model = keras.Sequential([
     keras.layers.Input(shape=(None, 6), dtype=tf.float32, ragged=False),
     #keras.layers.Bidirectional(rnn_layer),
-   # rnn_layer,
-    s_lstm_layer,
+    rnn_layer,
+
+   # s_lstm_layer,
+    keras.layers.Dropout(0.2),
     keras.layers.TimeDistributed(keras.layers.Dense(10, activation="softmax")),
 
 ])
