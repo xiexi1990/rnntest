@@ -43,6 +43,14 @@ dataset = tf.data.Dataset.from_generator(train_generator, output_types=(tf.float
 take_batches = dataset.repeat().shuffle(1000)
 
 
+class S_GRU(keras.layers.Layer):
+    def __init__(self, h_size, nlayer, **kwargs):
+        super().__init__(**kwargs)
+
+
+    def build(self, input_shape):
+
+
 
 
 
