@@ -1,8 +1,10 @@
 import pickle
-import keras
 import tensorflow as tf
+import tensorflow.keras as keras
+
 import numpy as np
 from tensorflow.python.keras.layers import AbstractRNNCell
+
 
 with open("x_y_100", "rb") as f:
     x, y = pickle.load(f)
@@ -98,10 +100,6 @@ class S_GRU(keras.layers.Layer):
 
         outputs = tf.scan(time_step, tf.transpose(inputs, [1, 0, 2]), initializer=init_st)
         return tf.transpose(outputs[:, self.nlayer - 1, :, :], [1, 0, 2])
-
-
-
-
 
 class S_LSTM(keras.layers.Layer):
     def __init__(self, h_size, nlayer, **kwargs):
@@ -202,8 +200,8 @@ d = rnn_layer(a[0])
 model = keras.Sequential([
     keras.layers.Input(shape=(None, 6), dtype=tf.float32, ragged=False),
     #keras.layers.Bidirectional(rnn_layer),
-   # rnn_layer,
-    keras.layers.Bidirectional(s_lstm_layer),
+    rnn_layer,
+ #   keras.layers.Bidirectional(s_lstm_layer),
  #   s_gru_layer,
     keras.layers.Dropout(0.2),
     keras.layers.TimeDistributed(keras.layers.Dense(10, activation="softmax")),
@@ -217,8 +215,5 @@ model.summary(line_length=200)
 _train = True
 
 model.fit(take_batches, steps_per_epoch=10, epochs=3)
-
-
-
 
 print("end")

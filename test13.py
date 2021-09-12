@@ -1,8 +1,8 @@
 from numpy import array
-from keras.models import Sequential
-from keras.layers import Dense
-from keras.layers import TimeDistributed
-from keras.layers import LSTM
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense
+from tensorflow.keras.layers import TimeDistributed
+from tensorflow.keras.layers import LSTM
 # prepare sequence
 length = 5
 seq = array([i/float(length) for i in range(length)])
