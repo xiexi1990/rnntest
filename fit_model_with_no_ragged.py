@@ -2,6 +2,7 @@ import pickle
 import keras
 import tensorflow as tf
 import numpy as np
+from tensorflow.python.keras.layers import AbstractRNNCell
 
 with open("x_y_100", "rb") as f:
     x, y = pickle.load(f)
@@ -43,12 +44,60 @@ dataset = tf.data.Dataset.from_generator(train_generator, output_types=(tf.float
 take_batches = dataset.repeat().shuffle(1000)
 
 
+# class SGRUCell(AbstractRNNCell):
+#     def __init__(self, units, **kwargs):
+#         self.units = units
+#         super(SGRUCell, self).__init__(**kwargs)
+#
+#     @property
+#     def state_size(self):
+#         return self.units
+#
+#     def build(self, input_shape):
+#         self.kernel = self.add_weight(shape=(input_shape[-1], self.units),
+#                                       initializer='uniform',
+#                                       name='kernel')
+#         self.recurrent_kernel = self.add_weight(
+#             shape=(self.units, self.units),
+#             initializer='uniform',
+#             name='recurrent_kernel')
+#         self.built = True
+#
+#     def call(self, inputs, states):
+#         prev_output = states[0]
+#         h = backend.dot(inputs, self.kernel)
+#         output = h + backend.dot(prev_output, self.recurrent_kernel)
+#         return output, output
+
 class S_GRU(keras.layers.Layer):
     def __init__(self, h_size, nlayer, **kwargs):
         super().__init__(**kwargs)
-
+        self.h_size = h_size
+        self.nlayer = nlayer
 
     def build(self, input_shape):
+        self.W = self.add_weight(shape=(self.nlayer, 3, self.h_size, self.h_size),initializer=keras.initializers.glorot_uniform)
+        self.U = self.add_weight(shape=(self.nlayer, 3, input_shape[2], self.h_size), initializer=keras.initializers.glorot_uniform)
+
+    def call(self, inputs, **kwargs):
+        in_shape = tf.shape(inputs)
+        batch_size = in_shape[0]
+        init_st = tf.zeros([self.nlayer, batch_size, self.h_size])
+
+        def time_step(prev, xt):
+            st = []
+            inp = xt
+            for i in range(self.nlayer):
+                z = tf.sigmoid(tf.matmul(inp, self.U[i][0]) + tf.matmul(prev[i], self.W[i][0]))
+                r = tf.sigmoid(tf.matmul(inp, self.U[i][1]) + tf.matmul(prev[i], self.W[i][1]))
+                h = tf.tanh(tf.matmul(inp, self.U[i][2]) + tf.matmul(r * prev[i], self.W[i][2]))
+                st_i = (1 - z) * h + z * prev[i]
+                inp = st_i
+                st.append(st_i)
+            return tf.stack(st)
+
+        outputs = tf.scan(time_step, tf.transpose(inputs, [1, 0, 2]), initializer=init_st)
+        return tf.transpose(outputs[:, self.nlayer - 1, :, :], [1, 0, 2])
 
 
 
@@ -56,7 +105,7 @@ class S_GRU(keras.layers.Layer):
 
 class S_LSTM(keras.layers.Layer):
     def __init__(self, h_size, nlayer, **kwargs):
-        super().__init__(**kwargs)
+        super(S_LSTM, self).__init__(**kwargs)
         self.h_size = h_size
         self.nlayer = nlayer
         self.Wxi, self.Wxf, self.Wxc, self.Wxo = [], [], [], []
@@ -89,11 +138,16 @@ class S_LSTM(keras.layers.Layer):
          #   self.c.append(tf.Variable(tf.zeros([1, self.h_size]), shape=[None, self.h_size]))
 
 
-    def call(self, inputs):
+    def call(self, inputs, **kwargs):
         in_shape = tf.shape(inputs)
         batch_size = in_shape[0]
         init_c = []
         init_h = []
+        if _train:
+            print("training")
+        else:
+            print("not train")
+
         for i in range(self.nlayer):
             init_c.append(tf.zeros([batch_size, self.h_size]))
             init_h.append(tf.zeros([batch_size, self.h_size]))
@@ -114,28 +168,43 @@ class S_LSTM(keras.layers.Layer):
         outputs = tf.scan(time_step, tf.transpose(inputs, [1, 0, 2]), tf.stack([init_c, init_h]))
         return tf.transpose(outputs[:, 1, self.nlayer-1, :, :], [1, 0, 2])
 
+    def get_config(self):
+        config = super(S_LSTM, self).get_config()
+        config.update({"h_size": self.h_size, "nlayer": self.nlayer})
+        return config
+
+
+_train = False
 
 stacked_cell = tf.keras.layers.StackedRNNCells(
             [tf.keras.layers.LSTMCell(units=16, implementation=1) for _ in range(2)])
 #rnn_layer = tf.keras.layers.RNN(stacked_cell, return_state=False, return_sequences=True)
 rnn_layer = tf.keras.layers.RNN(tf.keras.layers.LSTMCell(units=16, implementation=1), return_state=False, return_sequences=True)
 
-s_lstm_layer = S_LSTM(16, 2)
+# stacked_gru_cell = tf.keras.layers.StackedRNNCells([tf.keras.layers.GRUCell(units=16, implementation=1) for _ in range(2)])
+# gru_layer = tf.keras.layers.RNN(stacked_gru_cell, return_state=False, return_sequences=True)
+gru_layer2 = tf.keras.layers.RNN(tf.keras.layers.GRUCell(units=16,implementation=1))
 
-# while True:
-#     a = take_batches.as_numpy_iterator().__next__()
-#     if np.size(a[0], 0) > 1:
-#         break
-#
-# c = s_lstm_layer(a[0])
-# d = rnn_layer(a[0])
+s_lstm_layer = S_LSTM(16, 2)
+# s_gru_layer = S_GRU(16, 2)
+
+while True:
+    a = take_batches.as_numpy_iterator().__next__()
+    if np.size(a[0], 0) > 1:
+        break
+
+#f = gru_layer(a[0])
+g = gru_layer2(a[0])
+c = s_lstm_layer(a[0])
+d = rnn_layer(a[0])
+#e = s_gru_layer(a[0])
 
 model = keras.Sequential([
     keras.layers.Input(shape=(None, 6), dtype=tf.float32, ragged=False),
     #keras.layers.Bidirectional(rnn_layer),
-    rnn_layer,
-
-   # s_lstm_layer,
+   # rnn_layer,
+    keras.layers.Bidirectional(s_lstm_layer),
+ #   s_gru_layer,
     keras.layers.Dropout(0.2),
     keras.layers.TimeDistributed(keras.layers.Dense(10, activation="softmax")),
 
@@ -145,9 +214,9 @@ model.compile(optimizer=keras.optimizers.Adam(1e-4), loss=keras.losses.Categoric
 
 model.summary(line_length=200)
 
+_train = True
 
-
-model.fit(take_batches, steps_per_epoch=100, epochs=100)
+model.fit(take_batches, steps_per_epoch=10, epochs=3)
 
 
 
