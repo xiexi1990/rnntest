@@ -3,6 +3,7 @@ import keras
 import tensorflow as tf
 import numpy as np
 from tensorflow.python.keras.layers import AbstractRNNCell
+from tensorflow.python.util import nest
 with open("x_y_100", "rb") as f:
     x, y = pickle.load(f)
     f.close()
@@ -39,25 +40,24 @@ take_batches = dataset.repeat().shuffle(1000)
 
 class SGRUCell(AbstractRNNCell):
     def __init__(self, units, **kwargs):
-        self.units = units
         super(SGRUCell, self).__init__(**kwargs)
+        self.units = units
 
     @property
     def state_size(self):
         return self.units
+    @property
+    def output_size(self):
+        return self.units
 
     def build(self, input_shape):
-        self.kernel = self.add_weight(shape=(input_shape[-1], self.units),
-                                      initializer='uniform',
-                                      name='kernel')
-        self.recurrent_kernel = self.add_weight(
-            shape=(self.units, self.units),
-            initializer='uniform',
-            name='recurrent_kernel')
+        input_dim = input_shape[-1]
+        self.kernel = self.add_weight(shape=(input_dim, self.units * 3), name='kernel', initializer=keras.initializers.glorot_uniform)
+        self.recurrent_kernel = self.add_weight(shape=(self.units, self.units * 3), name='recurrent_kernel', initializer=keras.initializers.orthogonal)
         self.built = True
 
-    def call(self, inputs, states, training):
-        h_tm1 = states
+    def call(self, inputs, states):
+        h_tm1 = states[0] if nest.is_sequence(states) else states  # previous memory
         inputs_z = inputs
         inputs_r = inputs
         inputs_h = inputs
@@ -69,11 +69,44 @@ class SGRUCell(AbstractRNNCell):
         h_tm1_h = h_tm1
         recurrent_z = tf.matmul(h_tm1_z, self.recurrent_kernel[:, :self.units])
         recurrent_r = tf.matmul(h_tm1_r, self.recurrent_kernel[:, self.units:self.units * 2])
-        z = self.recurrent_activation(x_z + recurrent_z)
-        r = self.recurrent_activation(x_r + recurrent_r)
+        z = tf.sigmoid(x_z + recurrent_z)
+        r = tf.sigmoid(x_r + recurrent_r)
         recurrent_h = tf.matmul(r * h_tm1_h, self.recurrent_kernel[:, self.units * 2:])
-        hh = self.activation(x_h + recurrent_h)
+        hh = tf.tanh(x_h + recurrent_h)
         h = z * h_tm1 + (1 - z) * hh
-        new_state = h
+        new_state = [h] if nest.is_sequence(states) else h
         return h, new_state
 
+    def get_config(self):
+        config = super(SGRUCell, self).get_config()
+        config.update({"units": self.units})
+        return config
+
+stacked_cell = tf.keras.layers.StackedRNNCells(
+            [SGRUCell(units=16) for _ in range(2)])
+rnn_layer = tf.keras.layers.RNN(stacked_cell, return_state=False, return_sequences=True)
+
+while True:
+    a = take_batches.as_numpy_iterator().__next__()
+    if np.size(a[0], 0) > 1:
+        break
+
+_train = False
+
+d = rnn_layer(a[0])
+
+model = keras.Sequential([
+    keras.layers.Input(shape=(None, 6), dtype=tf.float32, ragged=False),
+    keras.layers.Bidirectional(rnn_layer),
+    keras.layers.Dropout(0.2),
+    keras.layers.TimeDistributed(keras.layers.Dense(10, activation="softmax")),
+])
+
+model.compile(optimizer=keras.optimizers.Adam(1e-4), loss=keras.losses.CategoricalCrossentropy(from_logits=False), metrics=['accuracy'])
+model.summary(line_length=200)
+
+_train = True
+
+model.fit(take_batches, steps_per_epoch=10, epochs=3)
+
+print("end")
