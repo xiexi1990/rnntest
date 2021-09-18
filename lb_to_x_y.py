@@ -1,18 +1,23 @@
 import pickle
 import numpy as np
+import random
 
-la_len = 100
-nclass = 10
+lb_len = 3
+nclass = 30
 
-with open("rand_la_" + str(la_len), "rb") as f:
-    la = pickle.load(f)
-    f.close()
+with open("dump_lb_" + str(lb_len), "rb") as f:
+    lb = pickle.load(f)
+
+#print(np.unique(np.array([r[0] for r in lb])))
+
+lb2 = random.sample(list(filter(lambda r: r[0] == 1001, lb)), nclass)
 
 y = []
 x = []
-j = 0
 i = 0
-while i < len(la):
+
+while i < nclass:
+    for
     # tagbytes = la[i][1].encode("gb18030")
     # tag = tagbytes[0] * 256 + tagbytes[1]
     # taglist.append(tag)
@@ -34,7 +39,6 @@ x, y = [list(i) for i in result]
 
 with open("x_y_" + str(la_len), "wb") as f:
     pickle.dump((x, y), f)
-    f.close()
 
 #_, _taglist = np.unique(taglist, return_inverse=True)
 

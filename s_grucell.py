@@ -3,6 +3,7 @@ import keras
 import tensorflow as tf
 import numpy as np
 from tensorflow.python.keras.layers import AbstractRNNCell
+from tensorflow.python.keras.layers.recurrent import DropoutRNNCellMixin
 from tensorflow.python.util import nest
 with open("x_y_100", "rb") as f:
     x, y = pickle.load(f)
@@ -38,10 +39,12 @@ tf.compat.v1.keras.backend.set_session(sess)
 dataset = tf.data.Dataset.from_generator(train_generator, output_types=(tf.float32, tf.float32),output_shapes=([None, None, 6], [None, 1, 10]))
 take_batches = dataset.repeat().shuffle(1000)
 
-class SGRUCell(AbstractRNNCell):
-    def __init__(self, units, **kwargs):
+class SGRUCell(DropoutRNNCellMixin, AbstractRNNCell):
+    def __init__(self, units, dropout=0., recurrent_dropout=0., **kwargs):
         super(SGRUCell, self).__init__(**kwargs)
         self.units = units
+        self.dropout = dropout
+        self.recurrent_dropout = recurrent_dropout
 
     @property
     def state_size(self):
@@ -58,15 +61,27 @@ class SGRUCell(AbstractRNNCell):
 
     def call(self, inputs, states):
         h_tm1 = states[0] if nest.is_sequence(states) else states  # previous memory
-        inputs_z = inputs
-        inputs_r = inputs
-        inputs_h = inputs
+        dp_mask = self.get_dropout_mask_for_cell(inputs, _train, count=3)
+        rec_dp_mask = self.get_recurrent_dropout_mask_for_cell(h_tm1, _train, count=3)
+        if 0. < self.dropout < 1.:
+            inputs_z = inputs * dp_mask[0]
+            inputs_r = inputs * dp_mask[1]
+            inputs_h = inputs * dp_mask[2]
+        else:
+            inputs_z = inputs
+            inputs_r = inputs
+            inputs_h = inputs
         x_z = tf.matmul(inputs_z, self.kernel[:, :self.units])
         x_r = tf.matmul(inputs_r, self.kernel[:, self.units:self.units * 2])
         x_h = tf.matmul(inputs_h, self.kernel[:, self.units * 2:])
-        h_tm1_z = h_tm1
-        h_tm1_r = h_tm1
-        h_tm1_h = h_tm1
+        if 0. < self.recurrent_dropout < 1.:
+            h_tm1_z = h_tm1 * rec_dp_mask[0]
+            h_tm1_r = h_tm1 * rec_dp_mask[1]
+            h_tm1_h = h_tm1 * rec_dp_mask[2]
+        else:
+            h_tm1_z = h_tm1
+            h_tm1_r = h_tm1
+            h_tm1_h = h_tm1
         recurrent_z = tf.matmul(h_tm1_z, self.recurrent_kernel[:, :self.units])
         recurrent_r = tf.matmul(h_tm1_r, self.recurrent_kernel[:, self.units:self.units * 2])
         z = tf.sigmoid(x_z + recurrent_z)
@@ -79,11 +94,11 @@ class SGRUCell(AbstractRNNCell):
 
     def get_config(self):
         config = super(SGRUCell, self).get_config()
-        config.update({"units": self.units})
+        config.update({"units": self.units, 'dropout': self.dropout, 'recurrent_dropout': self.recurrent_dropout})
         return config
 
 stacked_cell = tf.keras.layers.StackedRNNCells(
-            [SGRUCell(units=16) for _ in range(2)])
+            [SGRUCell(units=16, dropout=0.2, recurrent_dropout=0.2) for _ in range(2)])
 rnn_layer = tf.keras.layers.RNN(stacked_cell, return_state=False, return_sequences=True)
 
 while True:
@@ -98,7 +113,7 @@ d = rnn_layer(a[0])
 model = keras.Sequential([
     keras.layers.Input(shape=(None, 6), dtype=tf.float32, ragged=False),
     keras.layers.Bidirectional(rnn_layer),
-    keras.layers.Dropout(0.2),
+ #   keras.layers.Dropout(0.2),
     keras.layers.TimeDistributed(keras.layers.Dense(10, activation="softmax")),
 ])
 
@@ -107,6 +122,6 @@ model.summary(line_length=200)
 
 _train = True
 
-model.fit(take_batches, steps_per_epoch=10, epochs=3)
+model.fit(take_batches, steps_per_epoch=10, epochs=10)
 
 print("end")

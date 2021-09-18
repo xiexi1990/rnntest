@@ -5,9 +5,9 @@ import random
 
 with open("dump_la_10", "rb") as f:
     la_10 = pickle.load(f)
-    f.close()
 
 la_10.sort(key=lambda l:l[1])
+
 la_group = []
 i = 0
 while i < len(la_10):
@@ -29,6 +29,5 @@ for i in range(0, len(rand_group)):
 
 with open("rand_la_100", "wb") as f:
     pickle.dump(rand_la, f)
-    f.close()
 
 print(len(rand_la))

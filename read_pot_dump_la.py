@@ -170,11 +170,10 @@ for file in range(1001, 1001+la_total):
             if struct.unpack("l", f.read(4))[0] != -1:
                 print("error")
             total += 1
-        f.close()
 
 
-f = open("dump_la_" + str(la_total),"wb")
-#pickle.dump((filelist, taglist, strokeslist), f, protocol=4)
-pickle.dump(LA, f, protocol=4)
-f.close()
+with open("dump_la_" + str(la_total),"wb") as f:
+    #pickle.dump((filelist, taglist, strokeslist), f, protocol=4)
+    pickle.dump(LA, f, protocol=4)
+
 
