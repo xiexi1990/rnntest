@@ -5,13 +5,12 @@ import tensorflow.keras as keras
 from tensorflow.python.keras.layers.recurrent import DropoutRNNCellMixin, AbstractRNNCell
 from tensorflow.python.util import nest
 
-
-
-nclass = 30
-with open("x_y_lb_" + str(nclass), "rb") as f:
+nclass = 10
+repeat = 10
+with open("x_y_lb_" + str(nclass) + "_repeat_" + str(repeat), "rb") as f:
     x, y = pickle.load(f)
 
-dataset = tf.data.Dataset.from_tensor_slices((x, y))
+dataset = tf.data.Dataset.from_generator(lambda: iter(zip(x, y)), output_types=(tf.float32, tf.float32),output_shapes=([None, None, 6], [None, None, 6]))
 take_batches = dataset.repeat().shuffle(1000)
 
 config = tf.compat.v1.ConfigProto()
@@ -84,6 +83,8 @@ rnn_layer = tf.keras.layers.RNN(stacked_cell, return_state=False, return_sequenc
 _train = False
 
 a = take_batches.as_numpy_iterator().__next__()
-print(a)
+
 
 d = rnn_layer(a[0])
+
+print(d)
