@@ -3,6 +3,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pickle
 
+remove_dist_th = 20
+remove_ang_th = 0.9
+
 def remove_point_dist(_x, _y, _dist):
     i = 1
     while i < len(_x):
@@ -95,9 +98,9 @@ for file in range(1001, 1001+lb_total):
                 origin_x.append(_sx)
                 origin_y.append(_sy)
                 if len(_sx) > 2:
-                    _sx, _sy = remove_point_dist(_sx, _sy, 20)
+                    _sx, _sy = remove_point_dist(_sx, _sy, remove_dist_th)
                     if len(_sx) > 2:
-                        _sx, _sy = remove_point_ang(_sx, _sy, 0.98)
+                        _sx, _sy = remove_point_ang(_sx, _sy, remove_ang_th)
                 strokex.append(_sx)
                 strokey.append(_sy)
 
