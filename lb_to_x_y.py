@@ -12,6 +12,8 @@ with open("dump_lb_" + str(lb_len), "rb") as f:
 
 #print(np.unique(np.array([r[0] for r in lb])))
 
+random.seed(123)
+
 lb2 = random.sample(list(filter(lambda r: r[0] == 1001, lb)), nclass)
 
 y = []
@@ -66,6 +68,3 @@ while i < x.__len__():
 
 with open("x_y_lb_" + str(nclass) + "_repeat_" + str(repeat), "wb") as f:
     pickle.dump((batchx, batchy), f)
-
-#_, _taglist = np.unique(taglist, return_inverse=True)
-

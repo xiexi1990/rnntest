@@ -1,44 +1,23 @@
 import pickle
-import keras
-import tensorflow as tf
 import numpy as np
-from tensorflow.python.keras.layers import AbstractRNNCell
-from tensorflow.python.keras.layers.recurrent import DropoutRNNCellMixin
+import tensorflow as tf
+import tensorflow.keras as keras
+from tensorflow.python.keras.layers.recurrent import DropoutRNNCellMixin, AbstractRNNCell
 from tensorflow.python.util import nest
-with open("x_y_100", "rb") as f:
+
+
+
+nclass = 30
+with open("x_y_lb_" + str(nclass), "rb") as f:
     x, y = pickle.load(f)
-    f.close()
-xd = np.zeros(len(x), dtype=int)
-for i in range(len(x)):
-    xd[i] = np.size(x[i], 0)
-uniquex = np.unique(xd)
-def train_generator():
-    i = 0
-    while True:
-        curlen = np.size(x[i], 0)
-        xout = [x[i]]
-        yout = [y[i]]
-        i += 1
-        if i == len(x):
-            return
-            i = 0
-            continue
-        while np.size(x[i], 0) == curlen:
-            xout = np.append(xout, [x[i]], axis=0)
-            yout = np.append(yout, [y[i]], axis=0)
-            i += 1
-            if i == len(x):
-                return
-                i = 0
-                break
-        yield (xout, np.expand_dims(yout, 1))
+
+dataset = tf.data.Dataset.from_tensor_slices((x, y))
+take_batches = dataset.repeat().shuffle(1000)
+
 config = tf.compat.v1.ConfigProto()
 config.gpu_options.allow_growth=True
 sess = tf.compat.v1.Session(config=config)
 tf.compat.v1.keras.backend.set_session(sess)
-
-dataset = tf.data.Dataset.from_generator(train_generator, output_types=(tf.float32, tf.float32),output_shapes=([None, None, 6], [None, 1, 10]))
-take_batches = dataset.repeat().shuffle(1000)
 
 class SGRUCell(DropoutRNNCellMixin, AbstractRNNCell):
     def __init__(self, units, dropout=0., recurrent_dropout=0., **kwargs):
@@ -99,30 +78,12 @@ class SGRUCell(DropoutRNNCellMixin, AbstractRNNCell):
         return config
 
 stacked_cell = tf.keras.layers.StackedRNNCells(
-            [SGRUCell(units=16, dropout=0.2, recurrent_dropout=0.2) for _ in range(2)])
+            [SGRUCell(units=16, dropout=0., recurrent_dropout=0.) for _ in range(2)])
 rnn_layer = tf.keras.layers.RNN(stacked_cell, return_state=False, return_sequences=True)
-
-while True:
-    a = take_batches.as_numpy_iterator().__next__()
-    if np.size(a[0], 0) > 1:
-        break
 
 _train = False
 
+a = take_batches.as_numpy_iterator().__next__()
+print(a)
+
 d = rnn_layer(a[0])
-
-model = keras.Sequential([
-    keras.layers.Input(shape=(None, 6), dtype=tf.float32, ragged=False),
-    keras.layers.Bidirectional(rnn_layer),
- #   keras.layers.Dropout(0.2),
-    keras.layers.TimeDistributed(keras.layers.Dense(10, activation="softmax")),
-])
-
-model.compile(optimizer=keras.optimizers.Adam(1e-4), loss=keras.losses.CategoricalCrossentropy(from_logits=False), metrics=['accuracy'])
-model.summary(line_length=200)
-
-_train = True
-
-model.fit(take_batches, steps_per_epoch=10, epochs=10)
-
-print("end")
