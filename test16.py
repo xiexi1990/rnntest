@@ -30,7 +30,8 @@ class SGRUCell(DropoutRNNCellMixin, AbstractRNNCell):
         return self.units
     @property
     def output_size(self):
-        return self.units
+        #return self.units
+        return 30
 
     def build(self, input_shape):
         input_dim = input_shape[-1]
@@ -69,7 +70,9 @@ class SGRUCell(DropoutRNNCellMixin, AbstractRNNCell):
         hh = tf.tanh(x_h + recurrent_h)
         h = z * h_tm1 + (1 - z) * hh
         new_state = [h] if nest.is_sequence(states) else h
-        return h, new_state
+
+#        return h, new_state
+        return tf.matmul(h, tf.Variable(np.random.normal(size=(16,30)), dtype=float)), new_state
 
     def get_config(self):
         config = super(SGRUCell, self).get_config()
@@ -78,6 +81,7 @@ class SGRUCell(DropoutRNNCellMixin, AbstractRNNCell):
 
 stacked_cell = tf.keras.layers.StackedRNNCells(
             [SGRUCell(units=16, dropout=0., recurrent_dropout=0.) for _ in range(2)])
+rnn_cell = SGRUCell(units=16, dropout=0., recurrent_dropout=0.)
 rnn_layer = tf.keras.layers.RNN(stacked_cell, return_state=False, return_sequences=True)
 
 _train = False
