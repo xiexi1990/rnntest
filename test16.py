@@ -19,9 +19,11 @@ sess = tf.compat.v1.Session(config=config)
 tf.compat.v1.keras.backend.set_session(sess)
 
 class SGRUCell(DropoutRNNCellMixin, AbstractRNNCell):
-    def __init__(self, units, dropout=0., recurrent_dropout=0., **kwargs):
+    def __init__(self, units, in_tanh_dim, ch_class, dropout=0., recurrent_dropout=0., **kwargs):
         super(SGRUCell, self).__init__(**kwargs)
         self.units = units
+        self.in_tanh_dim = in_tanh_dim
+        self.ch_class = ch_class
         self.dropout = dropout
         self.recurrent_dropout = recurrent_dropout
 
@@ -35,6 +37,35 @@ class SGRUCell(DropoutRNNCellMixin, AbstractRNNCell):
 
     def build(self, input_shape):
         input_dim = input_shape[-1]
+        assert input_dim == 6
+
+        self.Wd = self.add_weight(shape=(2, self.in_tanh_dim), initializer='glorot_uniform')
+        self.bd = self.add_weight(shape=(self.in_tanh_dim), initializer='zeros')
+        self.Ws = self.add_weight(shape=(3, self.in_tanh_dim), initializer='glorot_uniform')
+        self.bs = self.add_weight(shape=(self.in_tanh_dim), initializer='zeros')
+        self.Wr = self.add_weight(shape=(self.units, self.units), initializer='glorot_uniform')
+        self.Ur = self.add_weight(shape=(self.in_tanh_dim, self.units), initializer='glorot_uniform')
+        self.Vr = self.add_weight(shape=(self.in_tanh_dim, self.units), initializer='glorot_uniform')
+        self.Mr = self.add_weight(shape=(self.ch_class, self.units), initializer='glorot_uniform')
+        self.br = self.add_weight(shape=(self.units), initializer='zeros')
+        self.Wz = self.add_weight(shape=(self.units, self.units), initializer='glorot_uniform')
+        self.Uz = self.add_weight(shape=(self.in_tanh_dim, self.units), initializer='glorot_uniform')
+        self.Vz = self.add_weight(shape=(self.in_tanh_dim, self.units), initializer='glorot_uniform')
+        self.Mz = self.add_weight(shape=(self.ch_class, self.units), initializer='glorot_uniform')
+        self.bz = self.add_weight(shape=(self.units), initializer='zeros')
+        self.W = self.add_weight(shape=(self.units, self.units), initializer='glorot_uniform')
+        self.U = self.add_weight(shape=(self.in_tanh_dim, self.units), initializer='glorot_uniform')
+        self.V = self.add_weight(shape=(self.in_tanh_dim, self.units), initializer='glorot_uniform')
+        self.M = self.add_weight(shape=(self.ch_class, self.units), initializer='glorot_uniform')
+        self.b = self.add_weight(shape=(self.units), initializer='zeros')
+        self.Wo = self.add_weight(shape=(self.units, self.units), initializer='glorot_uniform')
+        self.Uo = self.add_weight(shape=(self.in_tanh_dim, self.units), initializer='glorot_uniform')
+        self.Vo = self.add_weight(shape=(self.in_tanh_dim, self.units), initializer='glorot_uniform')
+        self.Mo = self.add_weight(shape=(self.ch_class, self.units), initializer='glorot_uniform')
+        self.bo = self.add_weight(shape=(self.units), initializer='zeros')
+
+
+
         self.kernel = self.add_weight(shape=(input_dim, self.units * 3), name='kernel', initializer=keras.initializers.glorot_uniform)
         self.recurrent_kernel = self.add_weight(shape=(self.units, self.units * 3), name='recurrent_kernel', initializer=keras.initializers.orthogonal)
         self.built = True
@@ -79,10 +110,9 @@ class SGRUCell(DropoutRNNCellMixin, AbstractRNNCell):
         config.update({"units": self.units, 'dropout': self.dropout, 'recurrent_dropout': self.recurrent_dropout})
         return config
 
-stacked_cell = tf.keras.layers.StackedRNNCells(
-            [SGRUCell(units=16, dropout=0., recurrent_dropout=0.) for _ in range(2)])
-rnn_cell = SGRUCell(units=16, dropout=0., recurrent_dropout=0.)
-rnn_layer = tf.keras.layers.RNN(stacked_cell, return_state=False, return_sequences=True)
+#stacked_cell = tf.keras.layers.StackedRNNCells([SGRUCell(units=16, in_tanh_dim=10, dropout=0., recurrent_dropout=0.) for _ in range(2)])
+rnn_cell = SGRUCell(units=16, in_tanh_dim=10, dropout=0., recurrent_dropout=0.)
+rnn_layer = tf.keras.layers.RNN(rnn_cell, return_state=False, return_sequences=True)
 
 _train = False
 
