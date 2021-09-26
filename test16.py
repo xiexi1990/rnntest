@@ -43,31 +43,13 @@ class SGRUCell(DropoutRNNCellMixin, AbstractRNNCell):
         self.bd = self.add_weight(shape=(self.in_tanh_dim), initializer='zeros')
         self.Ws = self.add_weight(shape=(3, self.in_tanh_dim), initializer='glorot_uniform')
         self.bs = self.add_weight(shape=(self.in_tanh_dim), initializer='zeros')
-        self.Wr = self.add_weight(shape=(self.units, self.units), initializer='glorot_uniform')
-        self.Ur = self.add_weight(shape=(self.in_tanh_dim, self.units), initializer='glorot_uniform')
-        self.Vr = self.add_weight(shape=(self.in_tanh_dim, self.units), initializer='glorot_uniform')
-        self.Mr = self.add_weight(shape=(self.ch_class, self.units), initializer='glorot_uniform')
-        self.br = self.add_weight(shape=(self.units), initializer='zeros')
-        self.Wz = self.add_weight(shape=(self.units, self.units), initializer='glorot_uniform')
-        self.Uz = self.add_weight(shape=(self.in_tanh_dim, self.units), initializer='glorot_uniform')
-        self.Vz = self.add_weight(shape=(self.in_tanh_dim, self.units), initializer='glorot_uniform')
-        self.Mz = self.add_weight(shape=(self.ch_class, self.units), initializer='glorot_uniform')
-        self.bz = self.add_weight(shape=(self.units), initializer='zeros')
-        self.W = self.add_weight(shape=(self.units, self.units), initializer='glorot_uniform')
-        self.U = self.add_weight(shape=(self.in_tanh_dim, self.units), initializer='glorot_uniform')
-        self.V = self.add_weight(shape=(self.in_tanh_dim, self.units), initializer='glorot_uniform')
-        self.M = self.add_weight(shape=(self.ch_class, self.units), initializer='glorot_uniform')
-        self.b = self.add_weight(shape=(self.units), initializer='zeros')
-        self.Wo = self.add_weight(shape=(self.units, self.units), initializer='glorot_uniform')
-        self.Uo = self.add_weight(shape=(self.in_tanh_dim, self.units), initializer='glorot_uniform')
-        self.Vo = self.add_weight(shape=(self.in_tanh_dim, self.units), initializer='glorot_uniform')
-        self.Mo = self.add_weight(shape=(self.ch_class, self.units), initializer='glorot_uniform')
-        self.bo = self.add_weight(shape=(self.units), initializer='zeros')
 
+        self.kernel_h = self.add_weight(shape=(self.units, self.units*4), initializer='orthogonal')
+        self.kernel_d = self.add_weight(shape=(self.in_tanh_dim, self.units*4), initializer='glorot_uniform')
+        self.kernel_s = self.add_weight(shape=(self.in_tanh_dim, self.units*4), initializer='glorot_uniform')
+        self.kernel_c = self.add_weight(shape=(self.ch_class, self.units * 4), initializer='glorot_uniform')
+        self.bias = self.add_weight(shape=(self.units*4), initializer='zeros')
 
-
-        self.kernel = self.add_weight(shape=(input_dim, self.units * 3), name='kernel', initializer=keras.initializers.glorot_uniform)
-        self.recurrent_kernel = self.add_weight(shape=(self.units, self.units * 3), name='recurrent_kernel', initializer=keras.initializers.orthogonal)
         self.built = True
 
     def call(self, inputs, states):
