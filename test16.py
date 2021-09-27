@@ -3,6 +3,7 @@ import numpy as np
 import tensorflow as tf
 import tensorflow.keras as keras
 from tensorflow.python.keras.layers.recurrent import DropoutRNNCellMixin, AbstractRNNCell
+from tensorflow.python.keras.layers import Layer
 from tensorflow.python.util import nest
 
 nclass = 10
@@ -18,12 +19,12 @@ config.gpu_options.allow_growth=True
 sess = tf.compat.v1.Session(config=config)
 tf.compat.v1.keras.backend.set_session(sess)
 
-class SGRUCell(DropoutRNNCellMixin, AbstractRNNCell):
-    def __init__(self, units, in_tanh_dim, ch_class, dropout=0., recurrent_dropout=0., **kwargs):
+class SGRUCell(DropoutRNNCellMixin, Layer):
+    def __init__(self, units, in_tanh_dim, nclass, dropout=0., recurrent_dropout=0., **kwargs):
         super(SGRUCell, self).__init__(**kwargs)
         self.units = units
         self.in_tanh_dim = in_tanh_dim
-        self.ch_class = ch_class
+        self.nclass = nclass
         self.dropout = dropout
         self.recurrent_dropout = recurrent_dropout
 
@@ -32,8 +33,7 @@ class SGRUCell(DropoutRNNCellMixin, AbstractRNNCell):
         return self.units
     @property
     def output_size(self):
-        #return self.units
-        return 30
+        return self.units
 
     def build(self, input_shape):
         input_dim = input_shape[-1]
@@ -44,29 +44,39 @@ class SGRUCell(DropoutRNNCellMixin, AbstractRNNCell):
         self.Ws = self.add_weight(shape=(3, self.in_tanh_dim), initializer='glorot_uniform')
         self.bs = self.add_weight(shape=(self.in_tanh_dim), initializer='zeros')
 
-        self.kernel_h = self.add_weight(shape=(self.units, self.units*4), initializer='orthogonal')
+        self.recurrent_kernel = self.add_weight(shape=(self.units, self.units * 4), initializer='orthogonal')
         self.kernel_d = self.add_weight(shape=(self.in_tanh_dim, self.units*4), initializer='glorot_uniform')
         self.kernel_s = self.add_weight(shape=(self.in_tanh_dim, self.units*4), initializer='glorot_uniform')
-        self.kernel_c = self.add_weight(shape=(self.ch_class, self.units * 4), initializer='glorot_uniform')
+        self.kernel_c = self.add_weight(shape=(self.nclass, self.units * 4), initializer='glorot_uniform')
         self.bias = self.add_weight(shape=(self.units*4), initializer='zeros')
 
         self.built = True
 
-    def call(self, inputs, states):
+    def call(self, inputs, states, training):
         h_tm1 = states[0] if nest.is_sequence(states) else states  # previous memory
-        dp_mask = self.get_dropout_mask_for_cell(inputs, _train, count=3)
-        rec_dp_mask = self.get_recurrent_dropout_mask_for_cell(h_tm1, _train, count=3)
+        d = inputs[:, 0:2]
+        s = inputs[:, 2:5]
+        ch = tf.cast(inputs[:, 5], tf.int32)
+        _d = tf.tanh(tf.matmul(d, self.Wd) + self.bd)
+        _s = tf.tanh(tf.matmul(s, self.Ws) + self.bs)
+        _ch = tf.one_hot(ch, self.nclass)
+        _d_mask = self.get_dropout_mask_for_cell(_d, training, count=3)
+        _s_mask = self.get_dropout_mask_for_cell(_s, training, count=3)
+        rec_dp_mask = self.get_recurrent_dropout_mask_for_cell(h_tm1, training, count=3)
         if 0. < self.dropout < 1.:
-            inputs_z = inputs * dp_mask[0]
-            inputs_r = inputs * dp_mask[1]
-            inputs_h = inputs * dp_mask[2]
+            _d_z = _d * _d_mask[0]
+            _d_r = _d * _d_mask[1]
+            _d_h = _d * _d_mask[2]
+            _s_z = _s * _s_mask[0]
+            _s_r = _s * _s_mask[1]
+            _s_h = _s * _s_mask[2]
         else:
-            inputs_z = inputs
-            inputs_r = inputs
-            inputs_h = inputs
-        x_z = tf.matmul(inputs_z, self.kernel[:, :self.units])
-        x_r = tf.matmul(inputs_r, self.kernel[:, self.units:self.units * 2])
-        x_h = tf.matmul(inputs_h, self.kernel[:, self.units * 2:])
+            _d_z = _d
+            _d_r = _d
+            _d_h = _d
+            _s_z = _s
+            _s_r = _s
+            _s_h = _s
         if 0. < self.recurrent_dropout < 1.:
             h_tm1_z = h_tm1 * rec_dp_mask[0]
             h_tm1_r = h_tm1 * rec_dp_mask[1]
@@ -75,32 +85,84 @@ class SGRUCell(DropoutRNNCellMixin, AbstractRNNCell):
             h_tm1_z = h_tm1
             h_tm1_r = h_tm1
             h_tm1_h = h_tm1
-        recurrent_z = tf.matmul(h_tm1_z, self.recurrent_kernel[:, :self.units])
-        recurrent_r = tf.matmul(h_tm1_r, self.recurrent_kernel[:, self.units:self.units * 2])
-        z = tf.sigmoid(x_z + recurrent_z)
-        r = tf.sigmoid(x_r + recurrent_r)
-        recurrent_h = tf.matmul(r * h_tm1_h, self.recurrent_kernel[:, self.units * 2:])
-        hh = tf.tanh(x_h + recurrent_h)
+        z = tf.sigmoid(tf.matmul(h_tm1_z, self.recurrent_kernel[:, :self.units])
+                       + tf.matmul(_d_z, self.kernel_d[:, :self.units])
+                       + tf.matmul(_s_z, self.kernel_s[:, :self.units])
+                       + tf.matmul(_ch, self.kernel_c[:, :self.units])
+                       + self.bias[:self.units])
+        r = tf.sigmoid(tf.matmul(h_tm1_r, self.recurrent_kernel[:, self.units:self.units * 2])
+                       + tf.matmul(_d_r, self.kernel_d[:, self.units:self.units * 2])
+                       + tf.matmul(_s_r, self.kernel_s[:, self.units:self.units * 2])
+                       + tf.matmul(_ch, self.kernel_c[:, self.units:self.units * 2])
+                       + self.bias[self.units:self.units * 2])
+        hh = tf.tanh(tf.matmul(r * h_tm1_h, self.recurrent_kernel[:, self.units * 2:self.units * 3])
+                       + tf.matmul(_d_h, self.kernel_d[:, self.units * 2:self.units * 3])
+                       + tf.matmul(_s_h, self.kernel_s[:, self.units * 2:self.units * 3])
+                       + tf.matmul(_ch, self.kernel_c[:, self.units * 2:self.units * 3])
+                       + self.bias[self.units * 2:self.units * 3])
         h = z * h_tm1 + (1 - z) * hh
+        o = tf.tanh(tf.matmul(h, self.recurrent_kernel[:, self.units * 3:])
+                       + tf.matmul(_d_r, self.kernel_d[:, self.units * 3:])
+                       + tf.matmul(_s_r, self.kernel_s[:, self.units * 3:])
+                       + tf.matmul(_ch, self.kernel_c[:, self.units * 3:])
+                       + self.bias[self.units * 3:])
         new_state = [h] if nest.is_sequence(states) else h
+        return o, new_state
 
-#        return h, new_state
-        return tf.matmul(h, tf.Variable(np.random.normal(size=(16,30)), dtype=float)), new_state
 
     def get_config(self):
         config = super(SGRUCell, self).get_config()
-        config.update({"units": self.units, 'dropout': self.dropout, 'recurrent_dropout': self.recurrent_dropout})
+        config.update({'units': self.units, 'in_tanh_dim': self.in_tanh_dim, 'nclass': self.nclass, 'dropout': self.dropout, 'recurrent_dropout': self.recurrent_dropout})
         return config
 
-#stacked_cell = tf.keras.layers.StackedRNNCells([SGRUCell(units=16, in_tanh_dim=10, dropout=0., recurrent_dropout=0.) for _ in range(2)])
-rnn_cell = SGRUCell(units=16, in_tanh_dim=10, dropout=0., recurrent_dropout=0.)
+loss_tracker = keras.metrics.Mean(name="loss")
+mae_metric = keras.metrics.MeanAbsoluteError(name="mae")
+
+rnn_cell = SGRUCell(units=16, in_tanh_dim=10, nclass=nclass, dropout=0., recurrent_dropout=0.)
 rnn_layer = tf.keras.layers.RNN(rnn_cell, return_state=False, return_sequences=True)
 
-_train = False
+class CustomModel(keras.Model):
+    def train_step(self, data):
+        x, y = data
+        with tf.GradientTape() as tape:
+            y_pred = self(x, training=True)  # Forward pass
+            # Compute our own loss
+            loss = keras.losses.mean_squared_error(y, y_pred)
 
-a = take_batches.as_numpy_iterator().__next__()
+        # Compute gradients
+        trainable_vars = self.trainable_variables
+        gradients = tape.gradient(loss, trainable_vars)
+
+        # Update weights
+        self.optimizer.apply_gradients(zip(gradients, trainable_vars))
+
+        # Compute our own metrics
+        loss_tracker.update_state(loss)
+        mae_metric.update_state(y, y_pred)
+        return {"loss": loss_tracker.result(), "mae": mae_metric.result()}
+
+    @property
+    def metrics(self):
+        # We list our `Metric` objects here so that `reset_states()` can be
+        # called automatically at the start of each epoch
+        # or at the start of `evaluate()`.
+        # If you don't implement this property, you have to call
+        # `reset_states()` yourself at the time of your choosing.
+        return [loss_tracker, mae_metric]
 
 
-d = rnn_layer(a[0])
+# Construct an instance of CustomModel
+inputs = keras.Input(shape=(None,6))
+outputs = rnn_layer(inputs)
+model = CustomModel(inputs, outputs)
 
-print(d)
+# We don't passs a loss or metrics here.
+model.compile(optimizer="adam")
+
+# Just use `fit` as usual -- you can use callbacks, etc.
+
+model.fit(take_batches, steps_per_epoch=10, epochs=3)
+
+# a = take_batches.as_numpy_iterator().__next__()
+# d = rnn_layer(a[0])
+# print(d)
