@@ -3,8 +3,10 @@ import numpy as np
 import tensorflow as tf
 import tensorflow.keras as keras
 from tensorflow.python.keras.layers.recurrent import DropoutRNNCellMixin, AbstractRNNCell
-from tensorflow.python.keras.layers import Layer
 from tensorflow.python.util import nest
+
+tf.random.set_seed(123)
+np.random.seed(1234)
 
 nclass = 10
 repeat = 10
@@ -19,7 +21,11 @@ config.gpu_options.allow_growth=True
 sess = tf.compat.v1.Session(config=config)
 tf.compat.v1.keras.backend.set_session(sess)
 
-class SGRUCell(DropoutRNNCellMixin, Layer):
+units = 16
+in_tan_dim = 10
+M = 8
+
+class SGRUCell(DropoutRNNCellMixin, keras.layers.Layer):
     def __init__(self, units, in_tanh_dim, nclass, dropout=0., recurrent_dropout=0., **kwargs):
         super(SGRUCell, self).__init__(**kwargs)
         self.units = units
@@ -37,7 +43,7 @@ class SGRUCell(DropoutRNNCellMixin, Layer):
 
     def build(self, input_shape):
         input_dim = input_shape[-1]
-        assert input_dim == 6
+        assert len(input_shape) == 2 and input_dim == 6
 
         self.Wd = self.add_weight(shape=(2, self.in_tanh_dim), initializer='glorot_uniform')
         self.bd = self.add_weight(shape=(self.in_tanh_dim), initializer='zeros')
@@ -115,19 +121,86 @@ class SGRUCell(DropoutRNNCellMixin, Layer):
         config.update({'units': self.units, 'in_tanh_dim': self.in_tanh_dim, 'nclass': self.nclass, 'dropout': self.dropout, 'recurrent_dropout': self.recurrent_dropout})
         return config
 
+class PostProcess(keras.layers.Layer):
+    def __init__(self, M, **kwargs):
+        super(PostProcess, self).__init__(**kwargs)
+        self.M = M
+
+    def build(self, input_shape):
+        input_dim = input_shape[-1]
+        self.Wgmm = self.add_weight(shape=(input_dim, self.M * 5), initializer='glorot_uniform')
+        self.bgmm = self.add_weight(shape=(self.M * 5), initializer='zeros')
+        self.Wsoftmax = self.add_weight(shape=(input_dim, 3), initializer='glorot_uniform')
+        self.bsoftmax = self.add_weight(shape=(3), initializer='zeros')
+        self.built = True
+
+
+    def call(self, inputs, **kwargs):
+        R5M = tf.matmul(inputs, self.Wgmm) + self.bgmm
+        _pi = R5M[:, :, :self.M]
+        pi = tf.exp(_pi) / tf.reduce_sum(tf.exp(_pi), axis=-1, keepdims=True)
+        mux = R5M[:, :, self.M:self.M * 2]
+        muy = R5M[:, :, self.M * 2:self.M * 3]
+        sigmax = tf.exp(R5M[:, :, self.M * 3:self.M * 4])
+        sigmay = tf.exp(R5M[:, :, self.M * 4:])
+
+        R3 = tf.matmul(inputs, self.Wsoftmax) + self.bsoftmax
+        p = tf.exp(R3) / tf.reduce_sum(tf.exp(R3), axis=-1, keepdims=True)
+
+        return pi, mux, muy, sigmax, sigmay, p
+
+    def get_config(self):
+        config = super(PostProcess, self).get_config()
+        config.update({"M": self.M})
+        return config
+
+def N(x, mu, sigma):
+    return tf.exp(-(x - mu)**2 / (2 * sigma**2)) / (sigma * np.sqrt(2 * np.pi))
+
 loss_tracker = keras.metrics.Mean(name="loss")
 mae_metric = keras.metrics.MeanAbsoluteError(name="mae")
 
-rnn_cell = SGRUCell(units=16, in_tanh_dim=10, nclass=nclass, dropout=0., recurrent_dropout=0.)
+rnn_cell = SGRUCell(units=units, in_tanh_dim=in_tan_dim, nclass=nclass, dropout=0., recurrent_dropout=0.)
 rnn_layer = tf.keras.layers.RNN(rnn_cell, return_state=False, return_sequences=True)
+post_process_layer = PostProcess(M=M)
+#
+# print(tf.executing_eagerly())
+#
+
+#
+# a = take_batches.as_numpy_iterator().__next__()
+# d = rnn_layer(a[0])
+# loss = keras.losses.mean_squared_error(a[1], tf.matmul(d, tf.ones((16, 6))))
+# pi, mux, muy, sigmax, sigmay, p = post_process_layer(d)
+#
+# y = a[1]
+# xtp1 = tf.expand_dims(y[:,:,0], axis=-1)
+# ytp1 = tf.expand_dims(y[:,:,1], axis=-1)
+# stp1 = y[:,:,2:5]
+#
+# w = tf.constant([1,5,100], dtype=tf.float32)
+#
+# lPd = tf.math.log(tf.reduce_sum(pi * N(xtp1, mux, sigmax) * N(ytp1, muy, sigmay), axis=-1))
+# lPs= tf.reduce_sum(w * stp1 * tf.math.log(p), axis=-1)
+#
+# loss = - tf.reduce_sum(lPd + lPs, axis=-1)
+#
+#
+#exit()
+
 
 class CustomModel(keras.Model):
     def train_step(self, data):
         x, y = data
         with tf.GradientTape() as tape:
-            y_pred = self(x, training=True)  # Forward pass
-            # Compute our own loss
-            loss = keras.losses.mean_squared_error(y, y_pred)
+            pi, mux, muy, sigmax, sigmay, p = self(x, training=True)  # Forward pass
+            xtp1 = tf.expand_dims(y[:,:,0], axis=-1)
+            ytp1 = tf.expand_dims(y[:,:,1], axis=-1)
+            stp1 = y[:,:,2:5]
+            w = tf.constant([1,5,100], dtype=tf.float32)
+            lPd = tf.math.log(tf.reduce_sum(pi * N(xtp1, mux, sigmax) * N(ytp1, muy, sigmay), axis=-1))
+            lPs= tf.reduce_sum(w * stp1 * tf.math.log(p), axis=-1)
+            loss = - (lPd + lPs)
 
         # Compute gradients
         trainable_vars = self.trainable_variables
@@ -138,8 +211,8 @@ class CustomModel(keras.Model):
 
         # Compute our own metrics
         loss_tracker.update_state(loss)
-        mae_metric.update_state(y, y_pred)
-        return {"loss": loss_tracker.result(), "mae": mae_metric.result()}
+      #  mae_metric.update_state(y, y_pred)
+        return {"loss": loss_tracker.result()}
 
     @property
     def metrics(self):
@@ -148,21 +221,26 @@ class CustomModel(keras.Model):
         # or at the start of `evaluate()`.
         # If you don't implement this property, you have to call
         # `reset_states()` yourself at the time of your choosing.
-        return [loss_tracker, mae_metric]
-
+        return [loss_tracker]
 
 # Construct an instance of CustomModel
 inputs = keras.Input(shape=(None,6))
-outputs = rnn_layer(inputs)
+gru_out = rnn_layer(inputs)
+outputs = post_process_layer(gru_out)
 model = CustomModel(inputs, outputs)
 
 # We don't passs a loss or metrics here.
 model.compile(optimizer="adam")
 
-# Just use `fit` as usual -- you can use callbacks, etc.
+class CustomCallback(keras.callbacks.Callback):
+    def __init__(self, model):
+        self.model = model
 
-model.fit(take_batches, steps_per_epoch=10, epochs=3)
+    def on_epoch_end(self, epoch):
+        y_pred = self.model.predict()
+        print('y predicted: ', y_pred)
 
-# a = take_batches.as_numpy_iterator().__next__()
-# d = rnn_layer(a[0])
-# print(d)
+
+
+model.fit(take_batches, steps_per_epoch=100, epochs=100, callbacks=[CustomCallback(model)])
+
