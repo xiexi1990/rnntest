@@ -147,7 +147,7 @@ class PostProcess(keras.layers.Layer):
         R3 = tf.matmul(inputs, self.Wsoftmax) + self.bsoftmax
         p = tf.exp(R3) / tf.reduce_sum(tf.exp(R3), axis=-1, keepdims=True)
 
-        return pi, mux, muy, sigmax, sigmay, p
+        return zip(pi, mux, muy, sigmax, sigmay, p)
 
     def get_config(self):
         config = super(PostProcess, self).get_config()
@@ -188,59 +188,78 @@ post_process_layer = PostProcess(M=M)
 #
 #exit()
 
+def loss(x, y):
+    pi, mux, muy, sigmax, sigmay, p = *x
+    xtp1 = tf.expand_dims(y[:, :, 0], axis=-1)
+    ytp1 = tf.expand_dims(y[:, :, 1], axis=-1)
+    stp1 = y[:, :, 2:5]
+    w = tf.constant([1, 5, 100], dtype=tf.float32)
+    lPd = tf.math.log(tf.reduce_sum(pi * N(xtp1, mux, sigmax) * N(ytp1, muy, sigmay), axis=-1))
+    lPs = tf.reduce_sum(w * stp1 * tf.math.log(p), axis=-1)
+    return - (lPd + lPs)
 
-class CustomModel(keras.Model):
-    def train_step(self, data):
-        x, y = data
-        with tf.GradientTape() as tape:
-            pi, mux, muy, sigmax, sigmay, p = self(x, training=True)  # Forward pass
-            xtp1 = tf.expand_dims(y[:,:,0], axis=-1)
-            ytp1 = tf.expand_dims(y[:,:,1], axis=-1)
-            stp1 = y[:,:,2:5]
-            w = tf.constant([1,5,100], dtype=tf.float32)
-            lPd = tf.math.log(tf.reduce_sum(pi * N(xtp1, mux, sigmax) * N(ytp1, muy, sigmay), axis=-1))
-            lPs= tf.reduce_sum(w * stp1 * tf.math.log(p), axis=-1)
-            loss = - (lPd + lPs)
+model = keras.Sequential([
+    keras.layers.Input(shape=(None, 6), dtype=tf.float32, ragged=False),
+    rnn_layer,
+    post_process_layer
+])
+model.compile(optimizer="adam", loss=loss)
+model.fit(take_batches, steps_per_epoch=100, epochs=100)
 
-        # Compute gradients
-        trainable_vars = self.trainable_variables
-        gradients = tape.gradient(loss, trainable_vars)
 
-        # Update weights
-        self.optimizer.apply_gradients(zip(gradients, trainable_vars))
 
-        # Compute our own metrics
-        loss_tracker.update_state(loss)
-      #  mae_metric.update_state(y, y_pred)
-        return {"loss": loss_tracker.result()}
-
-    @property
-    def metrics(self):
-        # We list our `Metric` objects here so that `reset_states()` can be
-        # called automatically at the start of each epoch
-        # or at the start of `evaluate()`.
-        # If you don't implement this property, you have to call
-        # `reset_states()` yourself at the time of your choosing.
-        return [loss_tracker]
+# class CustomModel(keras.Model):
+#     def train_step(self, data):
+#         x, y = data
+#         with tf.GradientTape() as tape:
+#             pi, mux, muy, sigmax, sigmay, p = self(x, training=True)  # Forward pass
+#             xtp1 = tf.expand_dims(y[:,:,0], axis=-1)
+#             ytp1 = tf.expand_dims(y[:,:,1], axis=-1)
+#             stp1 = y[:,:,2:5]
+#             w = tf.constant([1,5,100], dtype=tf.float32)
+#             lPd = tf.math.log(tf.reduce_sum(pi * N(xtp1, mux, sigmax) * N(ytp1, muy, sigmay), axis=-1))
+#             lPs= tf.reduce_sum(w * stp1 * tf.math.log(p), axis=-1)
+#             loss = - (lPd + lPs)
+#
+#         # Compute gradients
+#         trainable_vars = self.trainable_variables
+#         gradients = tape.gradient(loss, trainable_vars)
+#
+#         # Update weights
+#         self.optimizer.apply_gradients(zip(gradients, trainable_vars))
+#
+#         # Compute our own metrics
+#         loss_tracker.update_state(loss)
+#       #  mae_metric.update_state(y, y_pred)
+#         return {"loss": loss_tracker.result()}
+#
+#     @property
+#     def metrics(self):
+#         # We list our `Metric` objects here so that `reset_states()` can be
+#         # called automatically at the start of each epoch
+#         # or at the start of `evaluate()`.
+#         # If you don't implement this property, you have to call
+#         # `reset_states()` yourself at the time of your choosing.
+#         return [loss_tracker]
 
 # Construct an instance of CustomModel
-inputs = keras.Input(shape=(None,6))
-gru_out = rnn_layer(inputs)
-outputs = post_process_layer(gru_out)
-model = CustomModel(inputs, outputs)
+# inputs = keras.Input(shape=(None,6))
+# gru_out = rnn_layer(inputs)
+# outputs = post_process_layer(gru_out)
+# model = CustomModel(inputs, outputs)
 
 # We don't passs a loss or metrics here.
-model.compile(optimizer="adam")
-
-class CustomCallback(keras.callbacks.Callback):
-    def __init__(self, model):
-        self.model = model
-
-    def on_epoch_end(self, epoch):
-        y_pred = self.model.predict()
-        print('y predicted: ', y_pred)
-
-
-
-model.fit(take_batches, steps_per_epoch=100, epochs=100, callbacks=[CustomCallback(model)])
+# model.compile(optimizer="adam")
+#
+# class CustomCallback(keras.callbacks.Callback):
+#     def __init__(self, model):
+#         self.model = model
+#
+#     def on_epoch_end(self, epoch):
+#         y_pred = self.model.predict()
+#         print('y predicted: ', y_pred)
+#
+#
+#
+#model.fit(take_batches, steps_per_epoch=100, epochs=100, callbacks=[CustomCallback(model)])
 
