@@ -168,11 +168,55 @@ def construct_model(rnn_cell_units, in_tanh_dim, nclass, stateful, M, batch_shap
       ])
     return model
 
+def draw_real_char(ch):
+    fig1 = plt.figure()
+    drew = 0
+    while drew <= 10:
+        real_batch = take_batches.as_numpy_iterator().__next__()[0]
+        for _i in range(np.size(real_batch, 0)):
+            if real_batch[_i, 0, 5] == ch:
+                drew += 1
+                if drew > 10:
+                    break
+                real_plt = fig1.add_subplot((drew-1) // 5 + 1, 5, drew)
+                print(drew, (drew-1) // 5 + 1)
+                real_char = real_batch[_i, :, :]
+                real_cur_x = 0
+                real_cur_y = 0
+                for _j in range(1, np.size(real_char, 0)):
+                    real_next_x = real_cur_x + real_char[_j, 0]
+                    real_next_y = real_cur_y + real_char[_j, 1]
+                    if (real_char[_j, 2] == 1):
+                        real_plt.plot([real_cur_x, real_next_x], [real_cur_y, real_next_y], color='black')
+                    real_cur_x = real_next_x
+                    real_cur_y = real_next_y
+
+    plt.show()
+
 def draw_chars(model, classes, maxlen):
     fig = plt.figure()
     ch_cnt = 1
     for ch in classes:
         ch_plt = fig.add_subplot(1, len(classes), ch_cnt)
+        # real_plt = fig.add_subplot(2, len(classes), ch_cnt)
+        # find = False
+        # while not find:
+        #     real_batch = take_batches.as_numpy_iterator().__next__()[0]
+        #     for _i in range(np.size(real_batch, 0)):
+        #         if real_batch[_i, 0, 5] == ch:
+        #             find = True
+        #             break
+        # real_char = real_batch[_i, :, :]
+        # real_cur_x = 0
+        # real_cur_y = 0
+        # for _j in range(1, np.size(real_char, 0)):
+        #     real_next_x = real_cur_x + real_char[_j, 0]
+        #     real_next_y = real_cur_y + real_char[_j, 1]
+        #     if (real_char[_j, 2] == 1):
+        #         real_plt.plot([real_cur_x, real_next_x], [real_cur_y, real_next_y], color='black')
+        #     real_cur_x = real_next_x
+        #     real_cur_y = real_next_y
+
         model.reset_states()
         pnt_in = np.array([[[0, 0, 0, 0, 0, ch]]])
         pnt_cnt = 0
@@ -197,7 +241,9 @@ def draw_chars(model, classes, maxlen):
                 sum += p[i]
                 if sum > r2:
                     s_pred[i] = 1
+       #             s_pred[np.argmax(p)] = 1
                     break
+
 
             next_x = cur_x + x_pred
             next_y = cur_y + y_pred
@@ -214,18 +260,35 @@ def draw_chars(model, classes, maxlen):
         ch_cnt += 1
     plt.show()
 
-ckdir = 'gru2'
-if True:
+ckdir = 'gru'
+if False:
     model = construct_model(units, in_tanh_dim, nclass, False, M, [None, None, 6])
     model.compile(loss=loss, optimizer=keras.optimizers.Adam())
     checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(filepath=ckdir + '/ck_{epoch}', save_weights_only=True)
-    model.fit(take_batches, steps_per_epoch=2000, epochs=100, callbacks=[checkpoint_callback])
+    model.fit(take_batches, steps_per_epoch=30, epochs=10, callbacks=[checkpoint_callback])
 
 else:
+    # draw_real_char(5)
+    # exit()
     model = construct_model(units, in_tanh_dim, nclass, True, M, [1, 1, 6])
-    model.load_weights(tf.train.latest_checkpoint(ckdir))
-    model.build(tf.TensorShape([1, 1, 6]))
-    draw_chars(model, [0, 1, 2], 100)
+    model.load_weights(tf.train.latest_checkpoint('test_weights'))
+    # ii = 0
+    # while True:
+    #     a = take_batches.as_numpy_iterator().__next__()
+    #     los = loss(a[1], model(a[0]))
+    #     if(np.sum(los) < 0):
+    #         break
+    #     ii += 1
+    # print(ii)
+    # exit()
+
+
+
+
+    # model = construct_model(units, in_tanh_dim, nclass, True, M, [1, 1, 6])
+   # model.load_weights(tf.train.latest_checkpoint(ckdir))
+  #  model.build(tf.TensorShape([1, 1, 6]))
+    draw_chars(model, [5,6,7,8], 100)
 
 exit()
 
